@@ -1,0 +1,14 @@
+# Environment & secrets
+.env
+.env.*
+*.env
+
+# Build & archive artifacts
+*.zip
+
+# User contact lists / data
+recipients.csv
+
+# OS metadata
+.DS_Store
+Thumbs.db

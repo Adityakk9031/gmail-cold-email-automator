@@ -1,0 +1,162 @@
+/* Gmail Cold Email Automator - In-Page Floating HUD */
+
+#cold-mailer-hud {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 320px;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px #334155;
+  z-index: 2147483647; /* Highest possible z-index */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+#cold-mailer-hud * {
+  box-sizing: border-box;
+}
+
+.cm-hud-header {
+  background: #1e293b;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #334155;
+}
+
+.cm-hud-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.cm-hud-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.cm-hud-btn-icon {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.cm-hud-btn-icon:hover {
+  color: #ffffff;
+  background: #334155;
+}
+
+.cm-hud-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cm-hud-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cm-hud-label {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.cm-hud-value {
+  font-weight: 600;
+  color: #38bdf8;
+  font-size: 12px;
+}
+
+.cm-hud-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #334155;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cm-hud-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
+  transition: width 0.4s ease;
+}
+
+.cm-hud-countdown {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: #f59e0b;
+  padding: 4px 0;
+  letter-spacing: 0.5px;
+}
+
+.cm-hud-status-line {
+  background: #1e293b;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #cbd5e1;
+  text-align: center;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cm-hud-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.cm-hud-btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.2s;
+}
+
+.cm-hud-btn:hover {
+  opacity: 0.9;
+}
+
+.cm-hud-btn-pause {
+  background: #d97706;
+  color: #ffffff;
+}
+
+.cm-hud-btn-resume {
+  background: #059669;
+  color: #ffffff;
+}
+
+.cm-hud-btn-stop {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+/* Minimized HUD */
+#cold-mailer-hud.minimized .cm-hud-body {
+  display: none;
+}

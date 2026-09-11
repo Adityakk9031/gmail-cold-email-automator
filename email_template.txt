@@ -1,0 +1,17 @@
+Hi {Name},
+
+I’m Aditya Kumar Singh, a CSE graduate and software engineer focused on full-stack development and open source.
+
+I’ve worked as an LFX Mentee at The Linux Foundation and contributed to open-source projects including Apple FoundationDB, Google DeepMind, NVIDIA, Supabase, Appwrite, and Better Auth. I also have a 1708 CodeChef rating and 1618 Codeforces rating.
+
+I can help your team build and ship full-stack features, work on backend systems and AI integrations, debug and improve existing codebases, and contribute to open-source projects.
+
+I’m currently looking for full-time SDE / Full Stack Engineer opportunities or strong engineering internships. If you think my background could be useful to your team, I’d really appreciate you considering my profile.
+
+Resume attached for your review.
+
+GitHub: https://github.com/Adityakk9031
+Email: adityakrsingh9056@gmail.com
+
+Best regards,
+Aditya Kumar Singh

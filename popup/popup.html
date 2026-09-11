@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gmail Cold Email Automator</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-group">
+        <div class="app-icon">🚀</div>
+        <div>
+          <h2>Cold Mailer</h2>
+          <p class="subtitle">Personalized cold emails at safe intervals</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-popout" class="popout-btn" title="Open in a full browser tab so this page never closes when you switch windows">⛶ Open in Tab</button>
+        <div id="connection-status" class="badge badge-checking">Checking…</div>
+      </div>
+    </header>
+
+    <!-- Step 1: Recipients -->
+    <section class="card">
+      <div class="card-header">
+        <span class="step-num">1</span>
+        <h3>Recipients</h3>
+        <span id="recipient-count-badge" class="count-badge">0 emails</span>
+      </div>
+      <div class="tab-switch">
+        <button id="tab-csv" class="tab-btn active">Upload CSV</button>
+        <button id="tab-manual" class="tab-btn">Paste Emails</button>
+      </div>
+
+      <div id="csv-section" class="tab-content active">
+        <div class="file-dropzone" id="csv-dropzone">
+          <input type="file" id="csv-file-input" accept=".csv" />
+          <div class="dropzone-text">
+            <span class="icon">📁</span>
+            <span>Click or drop <strong>recipients.csv</strong></span>
+            <small class="muted">Columns: Email (required), Name, Company, Role</small>
+          </div>
+        </div>
+        <div id="csv-preview-info" class="file-info hidden"></div>
+      </div>
+
+      <div id="manual-section" class="tab-content">
+        <textarea id="manual-emails" placeholder="lalitha.sushrutha@juspay.in&#10;punith.s@juspay.in&#10;vaibhav.sharma@google.com&#10;hr@company.com" rows="4"></textarea>
+        <small class="muted" style="margin-top:4px;display:block">Paste one email per line. Names are auto-extracted from each address.</small>
+      </div>
+    </section>
+
+    <!-- Step 2: Subject & Template Setup -->
+    <section class="card">
+      <div class="card-header">
+        <span class="step-num">2</span>
+        <h3>Email Template Setup</h3>
+        <span id="template-saved-status" class="hint-tag hidden">✓ Saved</span>
+      </div>
+      
+      <div class="form-group">
+        <label for="email-subject">Subject Line</label>
+        <input type="text" id="email-subject" placeholder="Enter your subject line here..." />
+      </div>
+
+      <div class="form-group">
+        <div class="label-row">
+          <label for="email-body">Email Body</label>
+          <span class="hint-tag">Auto-name enabled</span>
+        </div>
+        <div class="template-tip">
+          💡 Write your message starting with <code>Hi Name,</code>. The name will be automatically replaced with each recipient's real first name extracted from their email!
+        </div>
+        <textarea id="email-body" rows="9" placeholder="Hi Name,&#10;&#10;Type or paste your email body here..."></textarea>
+      </div>
+
+      <!-- Template Action Row: Save Template & Clear -->
+      <div class="template-actions-row">
+        <button id="btn-save-template" type="button" class="btn-save">💾 Save Template</button>
+        <button id="btn-clear-template" type="button" class="btn-clear">🗑️ Clear</button>
+        <span id="save-feedback" class="save-feedback hidden">✓ Saved!</span>
+      </div>
+
+      <!-- Real-Time Live Preview -->
+      <div class="preview-card">
+        <div class="preview-header">
+          <span class="preview-title">👁️ Live Preview</span>
+          <span id="preview-target-email" class="preview-email-tag">Target: (Enter an email above)</span>
+        </div>
+        <div class="preview-meta">
+          <span>Extracted Name: <strong id="preview-extracted-name" class="highlight-name">-</strong></span>
+        </div>
+        <div class="preview-content">
+          <div class="preview-subject-line">
+            <span class="muted">Subject:</span> <strong id="preview-subject-text">(Subject will appear here)</strong>
+          </div>
+          <div class="preview-divider"></div>
+          <div id="preview-body-text" class="preview-body-content">
+            (Enter subject and body above to see live preview)
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 3: Resume Attachment -->
+    <section class="card">
+      <div class="card-header">
+        <span class="step-num">3</span>
+        <h3>Resume Attachment</h3>
+      </div>
+      <div class="file-dropzone" id="resume-dropzone">
+        <input type="file" id="resume-file-input" accept=".pdf,.docx,.doc" />
+        <div class="dropzone-text">
+          <span class="icon">📄</span>
+          <span id="resume-label">Click or drop <strong>Resume (.pdf / .docx)</strong></span>
+          <small id="resume-size" class="muted">Optional — attached to each email</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 4: Spam Protection -->
+    <section class="card">
+      <div class="card-header">
+        <span class="step-num">4</span>
+        <h3>Spam Protection</h3>
+      </div>
+      <div class="delay-row">
+        <label for="send-delay">Delay between sends:</label>
+        <div class="delay-input-group">
+          <input type="number" id="send-delay" value="30" min="15" max="300" />
+          <span>seconds</span>
+        </div>
+      </div>
+      <div class="checkbox-row">
+        <label>
+          <input type="checkbox" id="add-jitter" checked />
+          <span>Add natural human jitter (±4–8 seconds random variation)</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Action Footer -->
+    <footer class="footer">
+      <div id="status-message" class="status-msg hidden"></div>
+      <div class="button-group">
+        <button id="btn-test-send" class="secondary-btn" title="Sends only 1 email to verify">🧪 Test 1 Email</button>
+        <button id="btn-start" class="primary-btn">🚀 Start Campaign</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
