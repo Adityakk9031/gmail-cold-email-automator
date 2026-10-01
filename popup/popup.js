@@ -2,7 +2,27 @@
 
 let parsedCsvRecipients = [];
 let resumeFileData = null;
-let activeGmailTabId = null;
+let activeWebmailTabId = null;
+let activeWebmailType = null; // "Gmail" or "Zoho Mail"
+
+const WEBMAIL_PATTERNS = [
+  "https://mail.google.com/*",
+  "https://*.zoho.com/*",
+  "https://*.zoho.in/*",
+  "https://*.zoho.eu/*",
+  "https://*.zoho.com.au/*",
+  "https://*.zoho.jp/*",
+  "https://*.zoho.ca/*",
+  "https://*.zoho.sa/*",
+  "https://*.zoho.com.cn/*"
+];
+
+function getWebmailType(url) {
+  if (!url) return null;
+  if (url.startsWith("https://mail.google.com/")) return "Gmail";
+  if (/https:\/\/[^/]*zoho\.(com|in|eu|com\.au|jp|ca|sa|com\.cn)\//i.test(url)) return "Zoho Mail";
+  return null;
+}
 
 // ─────────────────────────────────────────
 //  Smart Name Extractor from email address
@@ -118,7 +138,7 @@ function renderBody(tpl, recipient) {
 document.addEventListener("DOMContentLoaded", async () => {
   setupTabs();
   bindEvents();
-  await checkGmailTab();
+  await checkWebmailTab();
   await restoreDraftAndSaved();
   updateLivePreview();
 });
@@ -260,31 +280,36 @@ function handleClearTemplate() {
 }
 
 // ─────────────────────────────────────────
-//  Gmail Tab Detection (Works in popup & tab)
+//  Webmail Tab Detection (Gmail & Zoho Mail)
 // ─────────────────────────────────────────
-async function checkGmailTab() {
+async function checkWebmailTab() {
   const badge = document.getElementById("connection-status");
   try {
-    // 1. Check if active tab is Gmail
+    // 1. Check if active tab is Gmail or Zoho Mail
     const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab?.url?.startsWith("https://mail.google.com/")) {
-      activeGmailTabId = activeTab.id;
-      badge.textContent = "● Gmail Connected";
+    const activeType = getWebmailType(activeTab?.url);
+    if (activeType) {
+      activeWebmailTabId = activeTab.id;
+      activeWebmailType = activeType;
+      badge.textContent = `● ${activeType} Connected`;
       badge.className = "badge badge-connected";
       return;
     }
 
-    // 2. If not active tab (e.g. extension opened in its own tab), search all open tabs for Gmail
-    const gmailTabs = await chrome.tabs.query({ url: "https://mail.google.com/*" });
-    if (gmailTabs.length > 0) {
-      activeGmailTabId = gmailTabs[0].id;
-      badge.textContent = "● Gmail Connected";
+    // 2. If not active tab (e.g. extension opened in its own tab), search all open tabs
+    const matchingTabs = await chrome.tabs.query({ url: WEBMAIL_PATTERNS });
+    if (matchingTabs.length > 0) {
+      const bestTab = matchingTabs[0];
+      activeWebmailTabId = bestTab.id;
+      activeWebmailType = getWebmailType(bestTab.url) || "Webmail";
+      badge.textContent = `● ${activeWebmailType} Connected`;
       badge.className = "badge badge-connected";
     } else {
-      activeGmailTabId = null;
-      badge.textContent = "● Open Gmail Tab";
+      activeWebmailTabId = null;
+      activeWebmailType = null;
+      badge.textContent = "● Open Gmail / Zoho";
       badge.className = "badge badge-disconnected";
-      showMsg("Please open mail.google.com in a browser tab.", "error");
+      showMsg("Please open Gmail or Zoho Mail in a browser tab.", "error");
     }
   } catch (err) {
     badge.textContent = "● Connection Error";
@@ -448,9 +473,9 @@ function updateLivePreview() {
 //  Launch Campaign
 // ─────────────────────────────────────────
 async function launchCampaign(testOnly) {
-  await checkGmailTab();
-  if (!activeGmailTabId) {
-    showMsg("Please make sure Gmail is open in a browser tab!", "error");
+  await checkWebmailTab();
+  if (!activeWebmailTabId) {
+    showMsg("Please make sure Gmail or Zoho Mail is open in a browser tab!", "error");
     return;
   }
 
@@ -476,8 +501,9 @@ async function launchCampaign(testOnly) {
   const delay = Math.max(15, parseInt(document.getElementById("send-delay").value, 10) || 30);
   const addJitter = document.getElementById("add-jitter").checked;
   const targets = testOnly ? [recipients[0]] : recipients;
+  const serviceLabel = activeWebmailType || "webmail";
 
-  showMsg(testOnly ? "Sending 1 test email…" : `Launching ${targets.length}-email campaign…`, "info");
+  showMsg(testOnly ? "Sending 1 test email…" : `Launching ${targets.length}-email campaign on ${serviceLabel}…`, "info");
 
   const payload = {
     action: "START_CAMPAIGN",
@@ -491,20 +517,20 @@ async function launchCampaign(testOnly) {
   };
 
   try {
-    await ensureContentScriptReady(activeGmailTabId);
-    const res = await chrome.tabs.sendMessage(activeGmailTabId, payload);
+    await ensureContentScriptReady(activeWebmailTabId);
+    const res = await chrome.tabs.sendMessage(activeWebmailTabId, payload);
     if (res?.status === "STARTED") {
-      showMsg("✓ Campaign started! Switch to Gmail tab to view progress.", "success");
+      showMsg(`✓ Campaign started! Switch to ${serviceLabel} tab to view progress.`, "success");
       setTimeout(() => {
         // If it's a popup, close; if in full tab, keep open
         if (window.innerWidth <= 550) window.close();
       }, 1600);
     } else {
-      showMsg(res?.message || "Could not contact Gmail. Please refresh the Gmail tab.", "error");
+      showMsg(res?.message || `Could not contact ${serviceLabel}. Please refresh the tab.`, "error");
     }
   } catch (err) {
     console.error(err);
-    showMsg("Failed to communicate with Gmail. Refresh Gmail tab and try again.", "error");
+    showMsg(`Failed to communicate with ${serviceLabel}. Refresh the tab and try again.`, "error");
   }
 }
 

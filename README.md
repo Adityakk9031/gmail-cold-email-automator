@@ -1,18 +1,19 @@
-# 🚀 Gmail Cold Email Automator
+# 🚀 Cold Email Automator (Gmail & Zoho Mail)
 
-A lightweight, privacy-focused Chrome/Edge extension (Manifest V3) that automates personalized cold outreach directly within Gmail, complete with automated resume attachments, smart name extraction, anti-spam jitter delays, and an interactive in-page HUD.
+A lightweight, privacy-focused Chrome/Edge extension (Manifest V3) that automates personalized cold outreach directly within **Gmail** and **Zoho Mail**, complete with automated resume/portfolio attachments, smart name extraction, anti-spam jitter delays, and an interactive in-page HUD.
 
 ---
 
 ## ✨ Features
 
-- **Smart Name Personalization:** Automatically extracts the recipient's first name from their email address (e.g. `lalitha.sushrutha@juspay.in` → `Lalitha`, `alex_smith@company.com` → `Alex`, `hr@company.com` → `Hiring Team`) and customizes the email greeting seamlessly.
+- **Dual Platform Support:** Runs natively inside both **Gmail** (`mail.google.com`) and **Zoho Mail** (`mail.zoho.com`, `mail.zoho.in`, `mail.zoho.eu`, `workplace.zoho.com`, etc.).
+- **Smart Name Personalization:** Automatically extracts the recipient's first name from their email address (e.g. `lalitha.sushrutha@juspay.in` → `Lalitha`, `alex_smith@company.com` → `Alex`, `contact@company.com` → `Hiring Team`) and customizes the email greeting seamlessly.
 - **Dedicated Template Setup & Live Preview:** Real-time live preview renders your personalized subject and body as you type.
 - **Continuous Autosave:** Never lose your subject or body when switching tabs to copy text — keystrokes are automatically persisted locally.
 - **Pop-out Full Tab Mode:** Click **⛶ Open in Tab** to manage your campaign in a dedicated tab that never closes when switching windows.
-- **Automated Resume Attachments:** Attaches your PDF or Word document automatically to each outgoing compose window.
+- **Automated Document Attachments:** Attaches your PDF or Word document automatically to each outgoing compose window.
 - **Spam & Rate-Limit Protection:** Configurable delay between sends with natural randomized human jitter (±4–8s) to protect your sender reputation.
-- **In-Page Floating Control HUD:** Draggable, minimizable progress overlay injected directly into Gmail with real-time **Pause**, **Resume**, and **Stop** controls.
+- **In-Page Floating Control HUD:** Draggable, minimizable progress overlay injected directly into Gmail or Zoho Mail with real-time **Pause**, **Resume**, and **Stop** controls.
 - **100% Client-Side & Private:** Operates entirely within your local browser session. No external servers, no tracking, and no credentials exposed.
 
 ---
@@ -28,13 +29,13 @@ A lightweight, privacy-focused Chrome/Edge extension (Manifest V3) that automate
    - Edge: `edge://extensions/`
 3. Toggle on **Developer mode** in the top-right corner.
 4. Click **Load unpacked** and select the root directory of this repository.
-5. The **Gmail Cold Email Automator** icon will appear in your extensions toolbar!
+5. The **Cold Email Automator** icon will appear in your extensions toolbar!
 
 ---
 
 ## 📖 How to Use
 
-1. Open **[Gmail](https://mail.google.com)** in a browser tab.
+1. Open **[Gmail](https://mail.google.com)** or **[Zoho Mail](https://mail.zoho.com)** in a browser tab.
 2. Click the extension icon in your browser toolbar (or click **⛶ Open in Tab**).
 3. **Step 1 - Recipients:**
    - Upload a `recipients.csv` file (columns: `Email`, `Name`, `Company`, `Role`), or
@@ -44,8 +45,8 @@ A lightweight, privacy-focused Chrome/Edge extension (Manifest V3) that automate
    - Enter your Email Body starting with `Hi Name,`.
    - Verify how it looks in the **Live Preview** card below.
    - *(Optional)* Click **💾 Save Template** to lock it in for your session.
-5. **Step 3 - Resume Attachment:**
-   - Drop your resume (`.pdf` or `.docx`).
+5. **Step 3 - Resume / Document Attachment:**
+   - Drop your resume or portfolio document (`.pdf` or `.docx`).
 6. **Step 4 - Spam Protection:**
    - Set the delay between emails (e.g. 30s) and enable human jitter.
 7. Click **🧪 Test 1 Email** to verify, or **🚀 Start Campaign** to launch!
@@ -62,7 +63,7 @@ A lightweight, privacy-focused Chrome/Edge extension (Manifest V3) that automate
 │   ├── popup.css            # Dark-theme styling and responsive layout
 │   └── popup.js             # Form validation, CSV parser, name extraction & draft persistence
 ├── content/
-│   ├── content.js           # Gmail DOM automation engine & interactive HUD
+│   ├── content.js           # Gmail & Zoho Mail DOM automation engine & interactive HUD
 │   └── content.css          # HUD styling and animations
 └── README.md
 ```
