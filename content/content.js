@@ -491,243 +491,392 @@
   }
 
   // =========================================================================
-  //  ZOHO MAIL ENGINE
-  //  Steps: click New Mail → fill To → fill Subject → fill Body → attach → Send
+  //  ZOHO MAIL ENGINE (Clean Step-by-Step Automation)
+  //  1. Click New Mail
+  //  2. Type recipient email in To
+  //  3. Type Subject
+  //  4. Type Body with name extracted from email
+  //  5. Drag & drop resume attachment
+  //  6. Press Send
   // =========================================================================
 
   async function sendZoho(recipient) {
     await checkPauseAndStop();
 
-    /* ── 1. Snapshot existing tabpanels BEFORE clicking New Mail ── */
-    const panelsBefore = new Set(document.querySelectorAll('[role="tabpanel"]'));
+    // ── STEP 1: Click "New Mail" (if compose is not already open) ──
+    let subjectEl = zohoFindSubjectInput();
+    let sendBtn = zohoFindSendBtn();
 
-    /* ── 2. Find and click the blue "New Mail" button ── */
-    setStatus("Clicking 'New Mail'…");
-    const btn = await waitFor(zohoFindNewMailBtn, 8000);
-    if (!btn) throw new Error("'New Mail' button not found — is Zoho Mail open?");
+    if (!subjectEl || !sendBtn) {
+      setStatus("Clicking 'New Mail'…");
+      const newMailBtn = await waitFor(zohoFindNewMailBtn, 8000);
+      if (!newMailBtn) throw new Error("'New Mail' button not found on Zoho Mail sidebar.");
 
-    btn.focus();
-    btn.click();
-    btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
-
-    await checkPauseAndStop();
-
-    /* ── 3. Wait for the brand-new compose tabpanel to appear ── */
-    setStatus("Waiting for compose tab…");
-    const composePane = await waitFor(() => {
-      // A: new tabpanel (wasn't there before click)
-      for (const p of document.querySelectorAll('[role="tabpanel"]')) {
-        if (!panelsBefore.has(p) && p.offsetParent !== null && !p.closest('#cold-mailer-hud')) return p;
-      }
-      // B: tab whose text is "No Subject"
-      for (const tab of document.querySelectorAll('[role="tab"]')) {
-        if (!(tab.textContent || '').toLowerCase().includes('no subject')) continue;
-        const pid = tab.getAttribute('aria-controls');
-        if (pid) { const el = document.getElementById(pid); if (el && el.offsetParent) return el; }
-        const tl = tab.closest('[role="tablist"]');
-        if (tl && tl.nextElementSibling && tl.nextElementSibling.offsetParent) return tl.nextElementSibling;
-      }
-      // C: compose class container
-      for (const sel of ['.zmComposeView','div[id*="compose" i]','div[class*="composeTab" i]']) {
-        const el = document.querySelector(sel);
-        if (el && el.offsetParent && !el.closest('#cold-mailer-hud,header,nav,aside')) return el;
-      }
-      return null;
-    }, 15000);
-
-    if (!composePane) throw new Error("Compose tab didn't open. Please try again.");
-
-    await sleep(700); // let Zoho finish rendering all fields
-    await checkPauseAndStop();
-
-    /* ── 4. Fill the "To" field with recipient's email ── */
-    setStatus(`Typing email: ${recipient.email}…`);
-
-    // After compose opens Zoho auto-focuses the To field → check activeElement first
-    let toField = document.activeElement;
-    if (!composePane.contains(toField) || zohoIsSearchBar(toField)) {
-      toField =
-        composePane.querySelector('.zmContactSuggest, .zmContactInput') ||
-        composePane.querySelector('[data-name="to"] input, [data-field="to"] input') ||
-        composePane.querySelector('input[name="to"], input[placeholder*="To" i], input[aria-label*="To" i]') ||
-        composePane.querySelector('[data-name="to"] [contenteditable="true"], [data-field="to"] [contenteditable="true"]') ||
-        (() => {
-          // First non-search editable element in pane
-          for (const el of composePane.querySelectorAll('input[type="text"],input:not([type]),[contenteditable="true"]')) {
-            if (el.offsetParent && !zohoIsSearchBar(el)) return el;
-          }
-          return null;
-        })();
-    }
-
-    if (!toField) throw new Error("'To' field not found in compose window.");
-
-    toField.focus();
-    toField.click();
-    await sleep(200);
-
-    for (const ch of recipient.email) {
+      console.log("[ColdMailer Zoho] Clicking New Mail button:", newMailBtn);
+      zohoClick(newMailBtn);
       await checkPauseAndStop();
-      if (toField.tagName === 'INPUT' || toField.tagName === 'TEXTAREA') {
-        toField.value += ch;
-        toField.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
-      } else {
-        try { document.execCommand('insertText', false, ch); } catch (_) { toField.textContent += ch; }
-        toField.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
+
+      // Wait for compose tab to open (Subject input + Send button appear)
+      setStatus("Waiting for compose tab…");
+      const ready = await waitFor(() => {
+        const s = zohoFindSubjectInput();
+        const b = zohoFindSendBtn();
+        return (s || b) ? { s, b } : null;
+      }, 15000);
+
+      if (!ready) {
+        // Fallback: try keyboard shortcut 'c'
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', keyCode: 67, bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keyup',   { key: 'c', keyCode: 67, bubbles: true }));
+        await sleep(1000);
+        const retry = zohoFindSubjectInput() || zohoFindSendBtn();
+        if (!retry) throw new Error("Zoho compose tab never opened — please check that Zoho Mail is loaded and try again.");
       }
-      await sleep(25);
     }
 
-    // Commit chip with Enter → Tab
-    await sleep(300);
-    toField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-    toField.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Enter', keyCode: 13, bubbles: true }));
+    await sleep(600); // let Zoho finish rendering
+    await checkPauseAndStop();
+
+    // Get the compose container
+    const composePane = zohoFindComposePane();
+
+    // ── STEP 2: Type recipient email address in To field ──
+    setStatus(`Adding: ${recipient.email}…`);
+    const toInput = await waitFor(() => zohoFindToInput(composePane), 5000);
+    if (!toInput) throw new Error("Zoho 'To' field not found inside compose pane.");
+
+    console.log("[ColdMailer Zoho] To field found:", toInput);
+    toInput.focus();
+    try { toInput.click(); } catch (_) {}
     await sleep(150);
-    toField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, bubbles: true }));
-    toField.dispatchEvent(new KeyboardEvent('keyup',   { key: 'Tab', keyCode: 9, bubbles: true }));
-    toField.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
-    await sleep(400);
+
+    // Clear existing content
+    if (toInput.tagName === 'INPUT' || toInput.tagName === 'TEXTAREA') {
+      toInput.value = '';
+      toInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(60);
+      for (const ch of recipient.email) {
+        await checkPauseAndStop();
+        toInput.value += ch;
+        toInput.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
+        await sleep(20);
+      }
+    } else {
+      // contenteditable div
+      try {
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+      } catch (_) {}
+      toInput.textContent = '';
+      toInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(60);
+      for (const ch of recipient.email) {
+        await checkPauseAndStop();
+        try {
+          document.execCommand('insertText', false, ch);
+        } catch (_) {
+          toInput.textContent += ch;
+        }
+        toInput.dispatchEvent(new InputEvent('input', { bubbles: true, data: ch, inputType: 'insertText' }));
+        await sleep(20);
+      }
+    }
+
+    await sleep(250);
     await checkPauseAndStop();
 
-    /* ── 5. Fill Subject ── */
-    setStatus('Typing subject…');
-    const subjectField =
-      composePane.querySelector('input[name="subject"], input[placeholder*="Subject" i], input[aria-label*="Subject" i]') ||
-      (() => {
-        const all = Array.from(composePane.querySelectorAll('input[type="text"],input:not([type])'))
-          .filter(el => el.offsetParent && !zohoIsSearchBar(el));
-        return all.length > 0 ? all[all.length - 1] : null; // Subject is last text input
-      })();
+    // Commit contact chip: Enter -> comma -> Tab
+    for (const kv of [{ key: 'Enter', code: 13 }, { key: ',', code: 188 }, { key: 'Tab', code: 9 }]) {
+      toInput.dispatchEvent(new KeyboardEvent('keydown', { key: kv.key, keyCode: kv.code, which: kv.code, bubbles: true }));
+      toInput.dispatchEvent(new KeyboardEvent('keyup',   { key: kv.key, keyCode: kv.code, which: kv.code, bubbles: true }));
+      await sleep(100);
+    }
+    toInput.dispatchEvent(new Event('change', { bubbles: true }));
+    toInput.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+    await sleep(350);
+    await checkPauseAndStop();
 
-    if (subjectField) {
-      const sub = renderSubject(config.subjectTemplate, recipient);
-      subjectField.focus();
-      subjectField.click();
-      subjectField.value = sub;
-      subjectField.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: sub }));
-      subjectField.dispatchEvent(new Event('change', { bubbles: true }));
-      await sleep(250);
+    // ── STEP 3: Type Subject ──
+    setStatus('Filling subject…');
+    subjectEl = zohoFindSubjectInput(composePane);
+    if (subjectEl) {
+      const subjectText = renderSubject(config.subjectTemplate, recipient);
+      subjectEl.focus();
+      try { subjectEl.click(); } catch (_) {}
+      subjectEl.value = subjectText;
+      subjectEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: subjectText }));
+      subjectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(220);
     }
     await checkPauseAndStop();
 
-    /* ── 6. Fill body ── */
+    // ── STEP 4: Type Body with personalized name from email ──
     setStatus('Writing email body…');
     const bodyInfo = await waitFor(() => zohoFindBody(composePane), 8000);
-    if (!bodyInfo) throw new Error("Body area not found in compose window.");
+    if (!bodyInfo) throw new Error("Zoho Mail body area not found.");
 
-    const { el: bodyEl, doc: bDoc, isTextarea } = bodyInfo;
+    const { el: bodyEl, doc: targetDoc, isTextarea } = bodyInfo;
     const bodyText = renderBody(config.bodyTemplate, recipient);
+    const resolvedName = (recipient && recipient.name && recipient.name !== 'Hiring Manager' && recipient.name !== 'Hiring Team')
+      ? recipient.name
+      : extractName(recipient.email);
 
+    setStatus(`Writing body for ${recipient.email}…`);
     bodyEl.focus();
     if (typeof bodyEl.click === 'function') bodyEl.click();
-    await sleep(300);
+    await sleep(200);
 
     if (isTextarea) {
       bodyEl.value = bodyText;
       bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
+      bodyEl.dispatchEvent(new Event('change', { bubbles: true }));
     } else {
-      try { bDoc.execCommand('selectAll', false, null); bDoc.execCommand('delete', false, null); } catch (_) {}
-      await sleep(100);
-      bodyEl.innerHTML = '';
-      const html = bodyText
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+      // Clear existing default text (e.g. "Sent using Zoho Mail")
       try {
-        if (!bDoc.execCommand('insertHTML', false, html)) bodyEl.innerHTML = html;
-      } catch (_) { bodyEl.innerHTML = html; }
+        targetDoc.execCommand('selectAll', false, null);
+        targetDoc.execCommand('delete', false, null);
+      } catch (_) {}
+      await sleep(80);
+
+      bodyEl.innerHTML = '';
+
+      const formattedHtml = bodyText
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+
+      let writtenViaExec = false;
+      try {
+        writtenViaExec = targetDoc.execCommand('insertHTML', false, formattedHtml);
+      } catch (_) {}
+
+      if (!writtenViaExec || !bodyEl.innerHTML || bodyEl.innerHTML.trim() === '') {
+        bodyEl.innerHTML = formattedHtml;
+      }
+
       bodyEl.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
-      // Remove default Zoho signature
+      bodyEl.dispatchEvent(new Event('change', { bubbles: true }));
+      await sleep(250);
+
+      // Clean default Zoho signature if still present
       if (bodyEl.innerHTML.includes('Sent using Zoho Mail')) {
         bodyEl.innerHTML = bodyEl.innerHTML.replace(/Sent using Zoho Mail/gi, '').trim();
       }
+
+      // Safety placeholder check
+      if (bodyEl.innerHTML.toLowerCase().includes('{name}') ||
+          bodyEl.innerHTML.toLowerCase().includes('[name]') ||
+          /\b(Hi|Hello|Hey|Dear)\s+Name\b/i.test(bodyEl.innerHTML)) {
+        bodyEl.innerHTML = bodyEl.innerHTML
+          .replace(/\{name\}/gi, resolvedName)
+          .replace(/\[name\]/gi, resolvedName)
+          .replace(/\b(Hi|Hello|Hey|Dear)\s+Name\b/gi, '$1 ' + resolvedName)
+          .replace(/\b(Hi|Hello|Hey|Dear)\s+name\b/gi, '$1 ' + resolvedName)
+          .replace(/\{company\}/gi, recipient.company || 'your company')
+          .replace(/\{role\}/gi, recipient.role || 'Software Engineer');
+      }
     }
-    await sleep(200);
+    await sleep(150);
     await checkPauseAndStop();
 
-    /* ── 7. Attach resume via drag-and-drop onto the body ── */
+    // ── STEP 5: Drag & drop resume into body ──
     if (config.resume && config.resume.base64) {
       setStatus(`Attaching ${config.resume.name}…`);
-      await sleep(400);
+      await sleep(350);
 
       const file = b64ToFile(config.resume.base64, config.resume.name, config.resume.type);
       const dt = new DataTransfer();
       dt.items.add(file);
 
-      // Try native file input first (invisible but reliable)
-      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'files')?.set;
-      const fileInput = document.querySelector('input[type="file"]');
-      let attached = false;
+      // 1. Drag & drop onto the body element
+      const dropTargets = [bodyEl];
+      if (targetDoc && targetDoc.body && targetDoc.body !== bodyEl) dropTargets.push(targetDoc.body);
 
+      for (const target of dropTargets) {
+        target.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        await sleep(80);
+        target.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
+        await sleep(80);
+        target.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
+      }
+      console.log('[ColdMailer Zoho] Dispatched drag & drop onto body ✓');
+
+      // 2. Also try native file input if present
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'files')?.set;
+      const fileInput = (targetDoc || document).querySelector('input[type="file"]') || document.querySelector('input[type="file"]');
       if (fileInput && nativeSetter) {
         try {
           nativeSetter.call(fileInput, dt.files);
           fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-          attached = true;
+          console.log('[ColdMailer Zoho] Also set native file input ✓');
         } catch (_) {}
       }
 
-      if (!attached) {
-        // Drag-and-drop onto the body element
-        const dropTarget = bodyEl;
-        dropTarget.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        await sleep(100);
-        dropTarget.dispatchEvent(new DragEvent('dragover',  { bubbles: true, cancelable: true, dataTransfer: dt }));
-        await sleep(100);
-        dropTarget.dispatchEvent(new DragEvent('drop',      { bubbles: true, cancelable: true, dataTransfer: dt }));
-      }
-
-      await sleep(3000); // wait for Zoho to process the attachment
+      await sleep(3200); // wait for Zoho upload to complete
     }
     await checkPauseAndStop();
 
-    /* ── 8. Click Send ── */
+    // ── STEP 6: Press Send ──
     setStatus(`Sending to ${recipient.email}…`);
-    zohoClickSend(composePane);
+    await zohoClickSend(composePane);
     await sleep(1800);
   }
 
-  /* ── Helper: detect Zoho search bar ── */
+  // ── Helper: Dispatches full mouse click events ──
+  function zohoClick(el) {
+    if (!el) return;
+    el.focus();
+    const opts = { bubbles: true, cancelable: true, view: window };
+    el.dispatchEvent(new PointerEvent('pointerdown', opts));
+    el.dispatchEvent(new MouseEvent('mousedown', opts));
+    el.dispatchEvent(new PointerEvent('pointerup', opts));
+    el.dispatchEvent(new MouseEvent('mouseup', opts));
+    el.click();
+    el.dispatchEvent(new MouseEvent('click', opts));
+    if (el.firstElementChild) {
+      try {
+        el.firstElementChild.dispatchEvent(new MouseEvent('mousedown', opts));
+        el.firstElementChild.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.firstElementChild.click();
+      } catch (_) {}
+    }
+  }
+
+  // ── Helper: Strict search bar guard ──
   function zohoIsSearchBar(el) {
     if (!el) return true;
     const p = (el.placeholder || '').toLowerCase();
+    const a = (el.getAttribute('aria-label') || '').toLowerCase();
     const t = (el.type || '').toLowerCase();
-    if (t === 'search' || p.includes('search') || p === '/' || p === 'search ( / )') return true;
-    if (el.closest('header')) return true;
-    let cur = el.parentElement;
-    for (let i = 0; i < 4 && cur && cur !== document.body; i++) {
-      const cn = (cur.className || '').toLowerCase();
-      if (cn.includes('search')) return true;
-      cur = cur.parentElement;
-    }
+    const n = (el.name || '').toLowerCase();
+    if (t === 'search') return true;
+    if (p.includes('search') || a.includes('search') || n.includes('search')) return true;
+    if (p === '/' || p === 'search ( / )') return true;
+    if (el.closest('header, [class*="search" i], [id*="search" i]')) return true;
     return false;
   }
 
-  /* ── Helper: find "New Mail" button ── */
+  // ── Helper: Find "New Mail" button in sidebar ──
   function zohoFindNewMailBtn() {
-    // Match exact text "New Mail"
-    for (const el of document.querySelectorAll('button,[role="button"],a,div,span')) {
+    for (const el of document.querySelectorAll('button, [role="button"], a, div, span')) {
       if (el.closest('#cold-mailer-hud')) continue;
       const txt = (el.textContent || '').trim().toLowerCase();
-      if ((txt === 'new mail' || txt === '+ new mail') && el.offsetParent) {
-        return el.closest('button,[role="button"],a') || el;
+      if ((txt === 'new mail' || txt === '+ new mail' || txt.startsWith('new mail')) && el.offsetParent !== null) {
+        return el.closest('button, [role="button"], a, div[class*="btn" i]') || el;
       }
     }
-    // Starts with "New Mail"
-    for (const el of document.querySelectorAll('button,[role="button"],a,div[class*="btn" i]')) {
-      if (el.closest('#cold-mailer-hud')) continue;
-      if ((el.textContent || '').trim().toLowerCase().startsWith('new mail') && el.offsetParent) return el;
-    }
-    // Attribute selectors
-    for (const sel of ['[aria-label*="New Mail" i]','[title*="New Mail" i]','[data-action="compose"],[data-action="new-mail"]','.zmNewMail','.zm-new-mail','.new-mail']) {
+    for (const sel of [
+      'button.zmNewMail', '.zmNewMail',
+      '[data-action="new-mail"]', '[data-action="compose"]', '[data-action*="compose" i]',
+      '[aria-label*="New Mail" i]', '[title*="New Mail" i]',
+      '.zm-new-mail', '.new-mail'
+    ]) {
       const el = document.querySelector(sel);
-      if (el && el.offsetParent) return el;
+      if (el && el.offsetParent !== null) return el;
     }
     return null;
   }
 
-  /* ── Helper: find body editor in compose pane ── */
+  // ── Helper: Find Compose Pane container ──
+  function zohoFindComposePane() {
+    // Look for active tabpanel or compose view
+    for (const sel of [
+      'div[role="tabpanel"]:not([aria-hidden="true"])',
+      '.zmComposeView',
+      'div[id*="compose" i]',
+      'div[class*="composeTab" i]',
+      'div[class*="ComposeView" i]',
+      'div[role="tabpanel"]'
+    ]) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (el.offsetParent !== null && !el.closest('#cold-mailer-hud, header, nav, aside')) {
+          if (el.querySelector('input[placeholder*="Subject" i], input[name*="subject" i], [title="Send"], button.zmSend')) {
+            return el;
+          }
+        }
+      }
+    }
+    return document.body;
+  }
+
+  // ── Helper: Find Subject Input ──
+  function zohoFindSubjectInput(pane) {
+    const root = pane || document;
+    for (const sel of [
+      'input[placeholder*="Subject" i]',
+      'input[aria-label*="Subject" i]',
+      'input[data-placeholder*="Subject" i]',
+      'input[name="subject"]',
+      'input[name*="subject" i]',
+      '.zmSubject input',
+      '.zm-compose-subject input',
+      'input.zmSubject'
+    ]) {
+      const el = root.querySelector(sel);
+      if (el && el.offsetParent !== null && !zohoIsSearchBar(el) && !el.closest('#cold-mailer-hud')) {
+        return el;
+      }
+    }
+    // Any visible text input inside compose pane whose placeholder mentions subject
+    for (const inp of root.querySelectorAll('input[type="text"], input:not([type])')) {
+      if (!inp.offsetParent || zohoIsSearchBar(inp) || inp.closest('#cold-mailer-hud')) continue;
+      const p = (inp.placeholder || inp.getAttribute('aria-label') || inp.name || '').toLowerCase();
+      if (p.includes('subject')) return inp;
+    }
+    // Position fallback: last visible input in pane
+    const inputs = Array.from(root.querySelectorAll('input[type="text"], input:not([type])'))
+      .filter(el => el.offsetParent !== null && !zohoIsSearchBar(el) && !el.closest('#cold-mailer-hud'));
+    if (inputs.length > 0) return inputs[inputs.length - 1];
+    return null;
+  }
+
+  // ── Helper: Find To Input ──
+  function zohoFindToInput(pane) {
+    const root = pane || document;
+    // 1. Specific class / attribute selectors
+    for (const sel of [
+      '.zmContactSuggest', '.zmContactInput', '.zmTo input', '.zm_to input',
+      '.zm-compose-to input', '[data-name="to"] input', '[data-field="to"] input',
+      'input[name="to"]', 'input[placeholder*="To" i]', 'input[aria-label*="To" i]',
+      'input[data-placeholder*="To" i]',
+      '.zmTo [contenteditable="true"]', '.zm_to [contenteditable="true"]',
+      '[data-name="to"] [contenteditable="true"]', '[data-field="to"] [contenteditable="true"]',
+      'div[aria-label*="To" i][contenteditable="true"]',
+      'div[placeholder*="To" i][contenteditable="true"]'
+    ]) {
+      for (const el of root.querySelectorAll(sel)) {
+        if (el.offsetParent !== null && !zohoIsSearchBar(el) && !el.closest('#cold-mailer-hud')) {
+          return el;
+        }
+      }
+    }
+    // 2. Row with "To" label
+    for (const row of root.querySelectorAll('div, tr, li, section')) {
+      if (!row.offsetParent || row.closest('#cold-mailer-hud')) continue;
+      const txt = (row.childNodes[0]?.textContent || row.textContent || '').trim().toLowerCase();
+      if (/^to\b/i.test(txt) || row.getAttribute('data-field') === 'to' || row.getAttribute('data-name') === 'to') {
+        const editables = row.querySelectorAll('input, textarea, [contenteditable="true"]');
+        for (const el of editables) {
+          if (el.offsetParent !== null && !zohoIsSearchBar(el) && !el.closest('#cold-mailer-hud')) {
+            return el;
+          }
+        }
+      }
+    }
+    // 3. Fallback: first editable element in compose pane that is not subject
+    const subj = zohoFindSubjectInput(pane);
+    const all = Array.from(root.querySelectorAll('input[type="text"], input:not([type]), textarea, [contenteditable="true"]'))
+      .filter(el => el.offsetParent !== null && !zohoIsSearchBar(el) && !el.closest('#cold-mailer-hud') && el !== subj);
+    if (all.length > 0) return all[0];
+    return null;
+  }
+
+  // ── Helper: Find Body Editor ──
   function zohoFindBody(pane) {
-    // Iframe (Zoho rich text editor often runs in an iframe)
-    for (const iframe of pane.querySelectorAll('iframe')) {
+    const root = pane || document;
+    // 1. Rich text iframe
+    for (const iframe of root.querySelectorAll('iframe')) {
       try {
         const doc = iframe.contentDocument || iframe.contentWindow?.document;
         if (!doc) continue;
@@ -737,51 +886,85 @@
         if (editable) return { el: editable, doc, isIframe: true, isTextarea: false };
       } catch (_) {}
     }
-    // Named contenteditable selectors
+    // 2. Direct contenteditable
     for (const sel of [
       '.zme-editor-content',
+      'div[contenteditable="true"].zmComposeEditor',
       'div[contenteditable="true"][class*="editor" i]',
       'div[contenteditable="true"][id*="editor" i]',
       'div[contenteditable="true"][data-placeholder]',
       'div[contenteditable="true"][aria-label*="Message" i]',
-      'div[contenteditable="true"][aria-label*="Body" i]',
+      'div[contenteditable="true"][aria-label*="Body" i]'
     ]) {
-      const el = pane.querySelector(sel);
-      if (el && el.offsetParent) return { el, doc: document, isIframe: false, isTextarea: false };
+      const el = root.querySelector(sel);
+      if (el && el.offsetParent !== null && !el.closest('#cold-mailer-hud')) {
+        return { el, doc: document, isIframe: false, isTextarea: false };
+      }
     }
-    // Any tall contenteditable (> 80px) in the pane = body
-    const tall = Array.from(pane.querySelectorAll('div[contenteditable="true"]')).find(el => {
-      if (!el.offsetParent || el.closest('#cold-mailer-hud')) return false;
+    // 3. Tall contenteditable (> 80px)
+    const subj = zohoFindSubjectInput(pane);
+    const to = zohoFindToInput(pane);
+    const tall = Array.from(root.querySelectorAll('div[contenteditable="true"]')).find(el => {
+      if (!el.offsetParent || el.closest('#cold-mailer-hud') || el === subj || el === to) return false;
       return el.getBoundingClientRect().height > 80;
     });
     if (tall) return { el: tall, doc: document, isIframe: false, isTextarea: false };
-    // Textarea fallback
-    for (const el of pane.querySelectorAll('textarea')) {
-      if (el.offsetParent) return { el, doc: document, isIframe: false, isTextarea: true };
+    // 4. Textarea
+    for (const el of root.querySelectorAll('textarea')) {
+      if (el.offsetParent !== null && !el.closest('#cold-mailer-hud') && !zohoIsSearchBar(el)) {
+        return { el, doc: document, isIframe: false, isTextarea: true };
+      }
     }
     return null;
   }
 
-  /* ── Helper: click Send button ── */
-  function zohoClickSend(pane) {
-    // Try pane-scoped Send first
-    for (const sel of ['button[data-action="send"]','button.zmSend','.zm-send-btn','.btnSend']) {
-      const el = (pane || document).querySelector(sel);
-      if (el && el.offsetParent) { el.click(); return; }
+  // ── Helper: Find Send Button ──
+  function zohoFindSendBtn(pane) {
+    const root = pane || document;
+    for (const sel of [
+      'button[data-action="send"]',
+      'button[data-action="mail-send"]',
+      'button.zmSend',
+      '.zm-send-btn',
+      '.btnSend',
+      '[title="Send"][class*="btn" i]',
+      '[aria-label="Send"][class*="btn" i]',
+      '[title="Send"]',
+      '[aria-label="Send"]'
+    ]) {
+      const el = root.querySelector(sel);
+      if (el && el.offsetParent !== null && !el.closest('#cold-mailer-hud')) return el;
     }
-    // Text-based "Send" button (whole page)
-    for (const el of document.querySelectorAll('button,[role="button"],a')) {
+    // Button strictly with text "Send" (and NOT "Send Later")
+    for (const el of root.querySelectorAll('button, [role="button"], a, div[class*="btn" i]')) {
       if (el.closest('#cold-mailer-hud')) continue;
       const txt = (el.textContent || '').trim().toLowerCase();
-      if (txt === 'send' && el.offsetParent) { el.click(); return; }
+      if (txt === 'send' && el.offsetParent !== null) {
+        return el;
+      }
     }
-    // Ctrl+Enter fallback
-    const target = pane || document.body;
-    target.dispatchEvent(new KeyboardEvent('keydown',  { key: 'Enter', keyCode: 13, ctrlKey: true, bubbles: true }));
-    target.dispatchEvent(new KeyboardEvent('keyup',    { key: 'Enter', keyCode: 13, ctrlKey: true, bubbles: true }));
+    return null;
   }
 
-  /* ── Shared util: base64 → File ── */
+  // ── Helper: Click Send ──
+  async function zohoClickSend(pane) {
+    const btn = zohoFindSendBtn(pane);
+    if (btn) {
+      console.log('[ColdMailer Zoho] Clicking Send button:', btn);
+      zohoClick(btn);
+      return;
+    }
+    // Fallback: Ctrl+Enter
+    console.log('[ColdMailer Zoho] Send button not found — using Ctrl+Enter fallback');
+    const target = pane || document.body;
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, ctrlKey: true, bubbles: true }));
+    target.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter', keyCode: 13, ctrlKey: true, bubbles: true }));
+    target.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, ctrlKey: true, bubbles: true }));
+  }
+
+  // ─────────────────────────────────────────
+  //  Shared Utilities
+  // ─────────────────────────────────────────
   function b64ToFile(dataUrl, name, type) {
     const [, data] = dataUrl.split(',');
     const bytes = atob(data);
